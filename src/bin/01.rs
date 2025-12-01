@@ -1,89 +1,83 @@
 advent_of_code::solution!(1);
 
-pub fn part_one(input: &str) -> Option<u32> {
-    let mut position = 50;
-    let mut zero_count = 0;
+#[derive(Debug, Clone, Copy)]
+struct Rotation {
+    direction: char,
+    distance: i32,
+}
 
-    for line in input.lines() {
+impl Rotation {
+    fn parse(line: &str) -> Option<Self> {
         let line = line.trim();
         if line.is_empty() {
-            continue;
+            return None;
         }
+        Some(Rotation {
+            direction: line.chars().next()?,
+            distance: line[1..].parse().ok()?,
+        })
+    }
 
-        let direction = line.chars().next()?;
-        let distance: i32 = line[1..].parse().ok()?;
-
-        position = match direction {
-            'L' => (position - distance).rem_euclid(100),
-            'R' => (position + distance).rem_euclid(100),
-            _ => return None,
-        };
-
-        if position == 0 {
-            zero_count += 1;
+    fn apply(self, position: i32) -> i32 {
+        match self.direction {
+            'L' => (position - self.distance).rem_euclid(100),
+            'R' => (position + self.distance).rem_euclid(100),
+            _ => position,
         }
     }
 
-    Some(zero_count)
-}
-
-pub fn part_two(input: &str) -> Option<u32> {
-    let mut position = 50;
-    let mut zero_count: u32 = 0;
-
-    for line in input.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        let direction = line.chars().next()?;
-        let distance: i32 = line[1..].parse().ok()?;
-
-        // Count how many times we pass through 0 during this rotation
-        let crosses = match direction {
+    fn count_zero_crosses(self, position: i32) -> u32 {
+        match self.direction {
             'L' => {
-                // Going left by distance D from position P
-                // We cross 0 when (P - k) mod 100 = 0 for k in [1, D]
-                // This happens at k = P, P+100, P+200, ...
                 if position == 0 {
-                    // Special case: from 0, going left hits 0 at steps 100, 200, ...
-                    (distance / 100) as u32
-                } else if distance >= position {
-                    (1 + (distance - position) / 100) as u32
+                    (self.distance / 100) as u32
+                } else if self.distance >= position {
+                    (1 + (self.distance - position) / 100) as u32
                 } else {
                     0
                 }
             }
             'R' => {
-                // Going right by distance D from position P
-                // We cross 0 when (P + k) mod 100 = 0 for k in [1, D]
-                // This happens at k = 100-P, 200-P, 300-P, ... (if P > 0)
                 if position == 0 {
-                    (distance / 100) as u32
+                    (self.distance / 100) as u32
                 } else {
                     let first_hit = 100 - position;
-                    if distance >= first_hit {
-                        (1 + (distance - first_hit) / 100) as u32
+                    if self.distance >= first_hit {
+                        (1 + (self.distance - first_hit) / 100) as u32
                     } else {
                         0
                     }
                 }
             }
-            _ => return None,
-        };
-
-        zero_count += crosses;
-
-        // Update position
-        position = match direction {
-            'L' => (position - distance).rem_euclid(100),
-            'R' => (position + distance).rem_euclid(100),
-            _ => return None,
-        };
+            _ => 0,
+        }
     }
+}
 
-    Some(zero_count)
+// Functional approach using fold
+pub fn part_one(input: &str) -> Option<u32> {
+    input
+        .lines()
+        .filter_map(Rotation::parse)
+        .try_fold((50, 0), |(pos, count), rotation| {
+            let new_pos = rotation.apply(pos);
+            let new_count = count + u32::from(new_pos == 0);
+            Some((new_pos, new_count))
+        })
+        .map(|(_, count)| count)
+}
+
+// Functional approach using fold
+pub fn part_two(input: &str) -> Option<u32> {
+    input
+        .lines()
+        .filter_map(Rotation::parse)
+        .try_fold((50, 0), |(pos, count), rotation| {
+            let crosses = rotation.count_zero_crosses(pos);
+            let new_pos = rotation.apply(pos);
+            Some((new_pos, count + crosses))
+        })
+        .map(|(_, count)| count)
 }
 
 #[cfg(test)]
