@@ -15,19 +15,19 @@ jobs:
               uses: actions/cache@v4
               continue-on-error: false
               with:
-                path: |
-                    ~/.cargo/bin/
-                    ~/.cargo/registry/index/
-                    ~/.cargo/registry/cache/
-                    ~/.cargo/git/db/
-                    target/
-                key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-                restore-keys: ${{ runner.os }}-cargo-
+                  path: |
+                      ~/.cargo/bin/
+                      ~/.cargo/registry/index/
+                      ~/.cargo/registry/cache/
+                      ~/.cargo/git/db/
+                      target/
+                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+                  restore-keys: ${{ runner.os }}-cargo-
             - name: cargo test
               run: cargo test
             # uncomment to enable clippy linter
-            # - name: cargo clippy
-            #   run: cargo clippy -- -D warnings
+            - name: cargo clippy
+              run: cargo clippy -- -D warnings
             # uncomment to enable format linter
-            # - name: cargo fmt
-            #   run: cargo fmt --check
+            - name: cargo fmt
+              run: cargo fmt --check
