@@ -1,5 +1,6 @@
 advent_of_code::solution!(2);
 
+#[cfg(test)]
 fn is_invalid_id(n: u64) -> bool {
     let s = n.to_string();
     let len = s.len();
@@ -13,6 +14,7 @@ fn is_invalid_id(n: u64) -> bool {
     s[..mid] == s[mid..]
 }
 
+#[cfg(test)]
 fn is_invalid_id_v2(n: u64) -> bool {
     let s = n.to_string();
     let len = s.len();
@@ -58,28 +60,92 @@ fn parse_ranges(input: &str) -> Option<Vec<(u64, u64)>> {
         .collect()
 }
 
-pub fn part_one(input: &str) -> Option<u64> {
+// Optimized: Generate invalid IDs using math instead of string operations
+pub fn part_one_fast(input: &str) -> Option<u64> {
     let ranges = parse_ranges(input)?;
+    let mut sum = 0u64;
 
-    let sum: u64 = ranges
-        .iter()
-        .flat_map(|&(start, end)| start..=end)
-        .filter(|&n| is_invalid_id(n))
-        .sum();
+    // Find min and max across all ranges to determine bounds
+    let min = ranges.iter().map(|(start, _)| start).min()?;
+    let max = ranges.iter().map(|(_, end)| end).max()?;
+
+    // Generate all numbers of form XX (pattern repeated exactly twice)
+    // Mathematical approach: if base has d digits, repeated = base * (10^d + 1)
+    // Example: 123 (3 digits) -> 123123 = 123 * (10^3 + 1) = 123 * 1001
+
+    // Try all possible digit lengths for the base pattern
+    for num_digits in 1..=5 {
+        // Max 5 digits per half (10 digits total)
+        let start = 10u64.pow(num_digits - 1);
+        let end = 10u64.pow(num_digits);
+        let multiplier = 10u64.pow(num_digits) + 1;
+
+        for base in start..end {
+            let n = base * multiplier;
+
+            // Check if n is in any range
+            if n > *max {
+                break;
+            }
+            if n >= *min {
+                for &(start, end) in &ranges {
+                    if n >= start && n <= end {
+                        sum += n;
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
     Some(sum)
 }
 
-pub fn part_two(input: &str) -> Option<u64> {
+// Optimized: Generate all repeated patterns (at least twice)
+pub fn part_two_fast(input: &str) -> Option<u64> {
     let ranges = parse_ranges(input)?;
+    let mut found = std::collections::HashSet::new();
 
-    let sum: u64 = ranges
-        .iter()
-        .flat_map(|&(start, end)| start..=end)
-        .filter(|&n| is_invalid_id_v2(n))
-        .sum();
+    let min = ranges.iter().map(|(start, _)| start).min()?;
+    let max = ranges.iter().map(|(_, end)| end).max()?;
+    let max_digits = max.to_string().len();
 
-    Some(sum)
+    // For each possible repetition count k (2, 3, 4, ...)
+    for k in 2..=max_digits {
+        // For each repetition count, determine max base needed
+        let max_base_digits = max_digits / k;
+        if max_base_digits == 0 {
+            break;
+        }
+
+        // Generate bases from 1 to 10^max_base_digits - 1
+        let end_base = 10u64.pow(max_base_digits as u32);
+
+        for base in 1..end_base {
+            let base_str = base.to_string();
+            let repeated_str = base_str.repeat(k);
+
+            if let Ok(n) = repeated_str.parse::<u64>()
+                && n >= *min && n <= *max && !found.contains(&n) {
+                    for &(start, end) in &ranges {
+                        if n >= start && n <= end {
+                            found.insert(n);
+                            break;
+                        }
+                    }
+                }
+        }
+    }
+
+    Some(found.iter().sum())
+}
+
+pub fn part_one(input: &str) -> Option<u64> {
+    part_one_fast(input)
+}
+
+pub fn part_two(input: &str) -> Option<u64> {
+    part_two_fast(input)
 }
 
 #[cfg(test)]
