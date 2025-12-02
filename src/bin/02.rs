@@ -79,6 +79,8 @@ fn generate_doubled_in_range(start: u64, end: u64) -> impl Iterator<Item = u64> 
 }
 
 // Pure function: Generate invalid IDs (repeated k times) within a single range
+// Uses mathematical formula: repeated = base × (10^(k×d) - 1) / (10^d - 1)
+// This is a geometric series sum
 fn generate_repeated_in_range(start: u64, end: u64, k: usize) -> impl Iterator<Item = u64> {
     let start_digits = start.to_string().len();
     let end_digits = end.to_string().len();
@@ -91,14 +93,29 @@ fn generate_repeated_in_range(start: u64, end: u64, k: usize) -> impl Iterator<I
         let base_start = 10u64.pow(pattern_len.saturating_sub(1) as u32);
         let base_end = 10u64.pow(pattern_len as u32);
 
-        (base_start..base_end).filter_map(move |base| {
-            let base_str = base.to_string();
-            let repeated_str = base_str.repeat(k);
-            repeated_str
-                .parse::<u64>()
-                .ok()
-                .filter(|&n| n >= start && n <= end)
-        })
+        // Mathematical approach: avoid string operations
+        // repeated = base × (10^(k×d) - 1) / (10^d - 1)
+        let d = pattern_len as u32;
+        let power_d = 10u64.pow(d);
+
+        // Calculate (10^(k×d) - 1) / (10^d - 1) - this is always an integer
+        let multiplier = if let Some(power_kd) = 10u64.checked_pow(k as u32 * d) {
+            (power_kd - 1) / (power_d - 1)
+        } else {
+            // Overflow case - skip this pattern length
+            return (0..0)
+                .filter_map(|_| None::<u64>)
+                .collect::<Vec<_>>()
+                .into_iter();
+        };
+
+        (base_start..base_end)
+            .filter_map(move |base| {
+                base.checked_mul(multiplier)
+                    .filter(|&n| n >= start && n <= end)
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     })
 }
 
