@@ -60,95 +60,74 @@ fn parse_ranges(input: &str) -> Option<Vec<(u64, u64)>> {
         .collect()
 }
 
-// Optimized: Generate invalid IDs using math instead of string operations
-pub fn part_one_fast(input: &str) -> Option<u64> {
-    let ranges = parse_ranges(input)?;
-    let mut sum = 0u64;
-
-    // Find min and max across all ranges to determine bounds
-    let min = ranges.iter().map(|(start, _)| start).min()?;
-    let max = ranges.iter().map(|(_, end)| end).max()?;
-
-    // Generate all numbers of form XX (pattern repeated exactly twice)
-    // Mathematical approach: if base has d digits, repeated = base * (10^d + 1)
-    // Example: 123 (3 digits) -> 123123 = 123 * (10^3 + 1) = 123 * 1001
-
-    // Try all possible digit lengths for the base pattern
-    for num_digits in 1..=5 {
-        // Max 5 digits per half (10 digits total)
-        let start = 10u64.pow(num_digits - 1);
-        let end = 10u64.pow(num_digits);
+// Pure function: Generate invalid IDs (XX pattern) within a single range
+fn generate_doubled_in_range(start: u64, end: u64) -> impl Iterator<Item = u64> {
+    // For pattern repeated twice: n = base * (10^d + 1) where d = digit count of base
+    (1..=5).flat_map(move |num_digits| {
+        let base_start = 10u64.pow(num_digits - 1);
+        let base_end = 10u64.pow(num_digits);
         let multiplier = 10u64.pow(num_digits) + 1;
 
-        for base in start..end {
-            let n = base * multiplier;
+        // Calculate which bases produce numbers in [start, end]
+        let min_base = start.div_ceil(multiplier); // ceiling division
+        let max_base = end / multiplier;
 
-            // Check if n is in any range
-            if n > *max {
-                break;
-            }
-            if n >= *min {
-                for &(start, end) in &ranges {
-                    if n >= start && n <= end {
-                        sum += n;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    Some(sum)
+        (min_base.max(base_start)..=max_base.min(base_end - 1))
+            .map(move |base| base * multiplier)
+            .filter(move |&n| n >= start && n <= end)
+    })
 }
 
-// Optimized: Generate all repeated patterns (at least twice)
-pub fn part_two_fast(input: &str) -> Option<u64> {
-    let ranges = parse_ranges(input)?;
-    let mut found = std::collections::HashSet::new();
+// Pure function: Generate invalid IDs (repeated k times) within a single range
+fn generate_repeated_in_range(start: u64, end: u64, k: usize) -> impl Iterator<Item = u64> {
+    let start_digits = start.to_string().len();
+    let end_digits = end.to_string().len();
 
-    let min = ranges.iter().map(|(start, _)| start).min()?;
-    let max = ranges.iter().map(|(_, end)| end).max()?;
-    let max_digits = max.to_string().len();
+    // Determine min and max pattern lengths needed
+    let min_pattern_len = start_digits.div_ceil(k); // ceiling division
+    let max_pattern_len = end_digits / k;
 
-    // For each possible repetition count k (2, 3, 4, ...)
-    for k in 2..=max_digits {
-        // For each repetition count, determine max base needed
-        let max_base_digits = max_digits / k;
-        if max_base_digits == 0 {
-            break;
-        }
+    (min_pattern_len..=max_pattern_len).flat_map(move |pattern_len| {
+        let base_start = 10u64.pow(pattern_len.saturating_sub(1) as u32);
+        let base_end = 10u64.pow(pattern_len as u32);
 
-        // Generate bases from 1 to 10^max_base_digits - 1
-        let end_base = 10u64.pow(max_base_digits as u32);
-
-        for base in 1..end_base {
+        (base_start..base_end).filter_map(move |base| {
             let base_str = base.to_string();
             let repeated_str = base_str.repeat(k);
+            repeated_str
+                .parse::<u64>()
+                .ok()
+                .filter(|&n| n >= start && n <= end)
+        })
+    })
+}
 
-            if let Ok(n) = repeated_str.parse::<u64>()
-                && n >= *min
-                && n <= *max
-                && !found.contains(&n)
-            {
-                for &(start, end) in &ranges {
-                    if n >= start && n <= end {
-                        found.insert(n);
-                        break;
-                    }
-                }
-            }
-        }
-    }
+// Pure functional approach for Part 1
+pub fn part_one(input: &str) -> Option<u64> {
+    let ranges = parse_ranges(input)?;
+
+    Some(
+        ranges
+            .into_iter()
+            .flat_map(|(start, end)| generate_doubled_in_range(start, end))
+            .sum(),
+    )
+}
+
+// Pure functional approach for Part 2
+pub fn part_two(input: &str) -> Option<u64> {
+    let ranges = parse_ranges(input)?;
+    let max_digits = ranges.iter().map(|(_, end)| end).max()?.to_string().len();
+
+    let found: std::collections::HashSet<u64> = (2..=max_digits)
+        .flat_map(|k| {
+            ranges
+                .iter()
+                .flat_map(move |&(start, end)| generate_repeated_in_range(start, end, k))
+        })
+        .collect();
 
     Some(found.iter().sum())
-}
-
-pub fn part_one(input: &str) -> Option<u64> {
-    part_one_fast(input)
-}
-
-pub fn part_two(input: &str) -> Option<u64> {
-    part_two_fast(input)
 }
 
 #[cfg(test)]
