@@ -126,14 +126,17 @@ pub fn part_two_fast(input: &str) -> Option<u64> {
             let repeated_str = base_str.repeat(k);
 
             if let Ok(n) = repeated_str.parse::<u64>()
-                && n >= *min && n <= *max && !found.contains(&n) {
-                    for &(start, end) in &ranges {
-                        if n >= start && n <= end {
-                            found.insert(n);
-                            break;
-                        }
+                && n >= *min
+                && n <= *max
+                && !found.contains(&n)
+            {
+                for &(start, end) in &ranges {
+                    if n >= start && n <= end {
+                        found.insert(n);
+                        break;
                     }
                 }
+            }
         }
     }
 
