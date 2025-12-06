@@ -1,102 +1,113 @@
 advent_of_code::solution!(6);
 
-pub fn part_one(input: &str) -> Option<u64> {
-    let lines: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
+fn transpose(input: &str) -> Option<(Vec<u8>, usize, usize)> {
+    let lines: Vec<&[u8]> = input.lines().map(|line| line.as_bytes()).collect();
     if lines.is_empty() {
-        return Some(0);
+        return None;
     }
 
     let height = lines.len();
     let width = lines.iter().map(|line| line.len()).max().unwrap_or(0);
 
-    let mut columns = Vec::with_capacity(width);
-    for j in 0..width {
-        let mut column = String::new();
-        for i in 0..height {
-            column.push(*lines.get(i).and_then(|row| row.get(j)).unwrap_or(&' '));
+    // Flat grid for cache-friendly access: columns stored contiguously
+    let mut grid = vec![b' '; width * height];
+
+    for col in 0..width {
+        for row in 0..height {
+            grid[col * height + row] = *lines.get(row)?.get(col).unwrap_or(&b' ');
         }
-        columns.push(column);
     }
 
-    let problem_results: Option<Vec<u64>> = columns
-        .split(|col| col.trim().is_empty())
-        .filter(|p_cols| !p_cols.is_empty())
-        .map(|p_cols| {
-            let p_height = p_cols.first()?.len();
-            let mut p_rows = Vec::with_capacity(p_height);
-            for i in 0..p_height {
-                let mut row = String::with_capacity(p_cols.len());
-                for col in p_cols {
-                    row.push(col.chars().nth(i)?);
-                }
-                p_rows.push(row);
-            }
+    Some((grid, width, height))
+}
 
-            let op_char = p_rows.last()?.trim().chars().next()?;
+fn solve(input: &str, reverse: bool) -> Option<u64> {
+    let (grid, width, height) = transpose(input)?;
 
-            let numbers: Vec<u64> = p_rows[..p_rows.len() - 1]
+    let mut total = 0u64;
+    let mut col_start = 0;
+
+    while col_start < width {
+        // Skip empty columns (problem separators)
+        while col_start < width
+            && grid[col_start * height..(col_start + 1) * height]
                 .iter()
-                .map(|row| row.trim())
-                .filter(|s| !s.is_empty())
-                .map(|s| s.parse().ok())
-                .collect::<Option<Vec<_>>>()?;
+                .all(|&b| b == b' ')
+        {
+            col_start += 1;
+        }
 
-            Some(match op_char {
-                '+' => numbers.iter().sum(),
-                '*' => numbers.iter().product(),
-                _ => 0,
-            })
-        })
-        .collect();
+        if col_start >= width {
+            break;
+        }
 
-    problem_results.map(|results| results.iter().sum())
+        // Find the end of the current problem
+        let mut col_end = col_start;
+        while col_end < width
+            && !grid[col_end * height..(col_end + 1) * height]
+                .iter()
+                .all(|&b| b == b' ')
+        {
+            col_end += 1;
+        }
+
+        // Extract operator from the last row of any column in this problem
+        let op = grid[col_start * height + height - 1];
+
+        // Parse numbers based on direction
+        let numbers = if reverse {
+            // Part 2: Read columns right-to-left, each column is a number (digits top-to-bottom)
+            ((col_start..col_end).rev())
+                .filter_map(|col| {
+                    let num_bytes: Vec<u8> = grid[col * height..(col + 1) * height - 1]
+                        .iter()
+                        .copied()
+                        .filter(|&b| b.is_ascii_digit())
+                        .collect();
+                    if num_bytes.is_empty() {
+                        None
+                    } else {
+                        std::str::from_utf8(&num_bytes).ok()?.parse::<u64>().ok()
+                    }
+                })
+                .collect::<Vec<_>>()
+        } else {
+            // Part 1: Read rows top-to-bottom (except last row), each row is a number
+            (0..height - 1)
+                .filter_map(|row| {
+                    let num_bytes: Vec<u8> = (col_start..col_end)
+                        .map(|col| grid[col * height + row])
+                        .filter(|&b| b.is_ascii_digit())
+                        .collect();
+                    if num_bytes.is_empty() {
+                        None
+                    } else {
+                        std::str::from_utf8(&num_bytes).ok()?.parse::<u64>().ok()
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+
+        // Calculate result based on operator
+        let result = match op {
+            b'+' => numbers.iter().sum::<u64>(),
+            b'*' => numbers.iter().product::<u64>(),
+            _ => 0,
+        };
+
+        total += result;
+        col_start = col_end;
+    }
+
+    Some(total)
+}
+
+pub fn part_one(input: &str) -> Option<u64> {
+    solve(input, false)
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
-    let lines: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
-    if lines.is_empty() {
-        return Some(0);
-    }
-
-    let height = lines.len();
-    let width = lines.iter().map(|line| line.len()).max().unwrap_or(0);
-
-    let mut columns = Vec::with_capacity(width);
-    for j in 0..width {
-        let mut column = String::new();
-        for i in 0..height {
-            column.push(*lines.get(i).and_then(|row| row.get(j)).unwrap_or(&' '));
-        }
-        columns.push(column);
-    }
-
-    let problems: Vec<_> = columns
-        .split(|col| col.trim().is_empty())
-        .filter(|p_cols| !p_cols.is_empty())
-        .collect();
-
-    let problem_results: Option<Vec<u64>> = problems
-        .iter()
-        .rev()
-        .map(|p_cols| {
-            let op_char = p_cols.first()?.chars().last()?;
-
-            let numbers = p_cols
-                .iter()
-                .map(|s| s[..s.len() - 1].trim())
-                .filter(|s| !s.is_empty())
-                .map(|s| s.parse().ok())
-                .collect::<Option<Vec<u64>>>()?;
-
-            Some(match op_char {
-                '+' => numbers.iter().sum(),
-                '*' => numbers.iter().product(),
-                _ => 0,
-            })
-        })
-        .collect();
-
-    problem_results.map(|results| results.iter().sum())
+    solve(input, true)
 }
 
 #[cfg(test)]
