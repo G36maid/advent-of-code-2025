@@ -22,6 +22,7 @@
    - Submit with `cargo solve <day> --release --submit 2`
 8. **Cleanup**: Run `cargo fmt && cargo clippy --bin <day>` to ensure code quality
 9. **Commit**: Commit solution using conventional commits format
+    - `<type>[optional scope]: <description>`, where types include: `fix:`, `feat:`, `build:`, `chore:`, `ci:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, and others.
 
 ### Git Workflow
 - **Commit Format**: `feat(day<NN>): solve part 1 and 2` or `feat(day<NN>): solve part 1`
