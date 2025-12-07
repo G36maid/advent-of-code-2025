@@ -3,95 +3,103 @@ advent_of_code::solution!(7);
 use std::collections::{HashMap, HashSet};
 
 pub fn part_one(input: &str) -> Option<u32> {
-    let grid: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
+    let grid: Vec<&[u8]> = input.lines().map(|line| line.as_bytes()).collect();
     if grid.is_empty() {
         return Some(0);
     }
+    let height = grid.len();
+    let width = grid.iter().map(|line| line.len()).max().unwrap_or(0);
 
-    // Find the starting column of 'S' in the first row.
-    let start_col = grid[0].iter().position(|&c| c == 'S')?;
+    // Find the starting position of 'S' in the first row.
+    let start_col = grid[0].iter().position(|&c| c == b'S')?;
 
-    // `beams` will store the column index of each active beam for the current row.
-    // Using a HashSet automatically handles cases where multiple beams merge at the same spot.
-    let mut beams: HashSet<usize> = HashSet::new();
-    beams.insert(start_col);
+    let mut active_beams: HashSet<usize> = HashSet::new();
+    active_beams.insert(start_col);
 
     let mut split_count = 0;
 
-    // Iterate through the grid row by row, starting from the row below 'S'.
-    for r in 1..grid.len() {
-        let mut next_beams = HashSet::new();
-        for &col in &beams {
-            // Beams that would be out of bounds are ignored.
-            if col >= grid[r].len() {
-                continue;
-            }
+    // Simulate row by row.
+    for row in 0..(height - 1) {
+        if active_beams.is_empty() {
+            break;
+        }
 
-            match grid[r][col] {
-                '^' => {
-                    split_count += 1;
-                    // A splitter creates two new beams for the next row.
-                    if col > 0 {
-                        next_beams.insert(col - 1);
+        let mut next_beams: HashSet<usize> = HashSet::new();
+        for &col in &active_beams {
+            // Check the character in the row below the current beam.
+            // Beams that go off the side of the manifold are simply terminated.
+            if let Some(&next_char) = grid.get(row + 1).and_then(|r| r.get(col)) {
+                match next_char {
+                    b'^' => {
+                        split_count += 1;
+                        // A new beam is created to the left, if not at the edge.
+                        if col > 0 {
+                            next_beams.insert(col - 1);
+                        }
+                        // A new beam is created to the right, if not at the edge.
+                        if col + 1 < width {
+                            next_beams.insert(col + 1);
+                        }
                     }
-                    next_beams.insert(col + 1);
+                    b'.' => {
+                        // The beam continues downward.
+                        next_beams.insert(col);
+                    }
+                    // Any other character is treated as empty space for beam propagation.
+                    _ => {
+                        next_beams.insert(col);
+                    }
                 }
-                '.' => {
-                    // An empty space lets the beam pass through to the same column in the next row.
-                    next_beams.insert(col);
-                }
-                _ => (), // Should not happen with valid input
             }
         }
-        beams = next_beams;
+        active_beams = next_beams;
     }
 
     Some(split_count)
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
-    let grid: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
+    let grid: Vec<&[u8]> = input.lines().map(|line| line.as_bytes()).collect();
     if grid.is_empty() {
         return Some(0);
     }
+    let height = grid.len();
+    let width = grid.iter().map(|line| line.len()).max().unwrap_or(0);
 
-    // Find the starting column of 'S'.
-    let start_col = grid[0].iter().position(|&c| c == 'S')?;
+    let start_col = grid[0].iter().position(|&c| c == b'S')?;
 
-    // `timelines` stores the number of ways a particle can reach each column in the current row.
-    // Format: { column_index => number_of_timelines }
     let mut timelines: HashMap<usize, u64> = HashMap::new();
     timelines.insert(start_col, 1);
 
-    // Use dynamic programming, processing the grid row by row.
-    for r in 1..grid.len() {
-        let mut next_timelines = HashMap::new();
-        for (&col, &count) in &timelines {
-            // Particles that would go out of bounds are ignored.
-            if col >= grid[r].len() {
-                continue;
-            }
+    for row in 0..(height - 1) {
+        if timelines.is_empty() {
+            break;
+        }
 
-            match grid[r][col] {
-                '^' => {
-                    // A splitter duplicates the timelines. The current count is added to the
-                    // tallies for the left and right paths in the next row.
-                    if col > 0 {
-                        *next_timelines.entry(col - 1).or_insert(0) += count;
+        let mut next_timelines: HashMap<usize, u64> = HashMap::new();
+        for (&col, &count) in &timelines {
+            if let Some(&next_char) = grid.get(row + 1).and_then(|r| r.get(col)) {
+                match next_char {
+                    b'^' => {
+                        if col > 0 {
+                            *next_timelines.entry(col - 1).or_insert(0) += count;
+                        }
+                        if col + 1 < width {
+                            *next_timelines.entry(col + 1).or_insert(0) += count;
+                        }
                     }
-                    *next_timelines.entry(col + 1).or_insert(0) += count;
+                    b'.' => {
+                        *next_timelines.entry(col).or_insert(0) += count;
+                    }
+                    _ => {
+                        *next_timelines.entry(col).or_insert(0) += count;
+                    }
                 }
-                '.' => {
-                    // An empty space just passes the timelines down to the same column.
-                    *next_timelines.entry(col).or_insert(0) += count;
-                }
-                _ => (), // Should not happen with valid input
             }
         }
         timelines = next_timelines;
     }
 
-    // The total number of timelines is the sum of timelines at all possible final positions.
     Some(timelines.values().sum())
 }
 
