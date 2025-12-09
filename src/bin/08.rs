@@ -62,10 +62,7 @@ fn parse_input(input: &str) -> Vec<Point> {
         .lines()
         .filter(|l| !l.is_empty())
         .map(|line| {
-            let parts: Vec<i64> = line
-                .split(',')
-                .map(|s| s.parse().unwrap())
-                .collect();
+            let parts: Vec<i64> = line.split(',').map(|s| s.parse().unwrap()).collect();
             Point {
                 x: parts[0],
                 y: parts[1],
@@ -82,7 +79,7 @@ fn dist_sq(p1: &Point, p2: &Point) -> i64 {
 pub fn part_one(input: &str) -> Option<u64> {
     let points = parse_input(input);
     let n = points.len();
-    
+
     // Generate all edges
     let mut edges = Vec::with_capacity(n * (n - 1) / 2);
     for i in 0..n {
@@ -102,7 +99,7 @@ pub fn part_one(input: &str) -> Option<u64> {
     let limit = if n < 100 { 10 } else { 1000 };
 
     let mut dsu = Dsu::new(n);
-    
+
     // Process first `limit` edges
     for edge in edges.iter().take(limit) {
         dsu.union(edge.u, edge.v);
