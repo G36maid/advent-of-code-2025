@@ -15,12 +15,12 @@ impl Point {
     }
 }
 
-struct DSU {
+struct Dsu {
     parent: Vec<usize>,
     size: Vec<u64>,
 }
 
-impl DSU {
+impl Dsu {
     fn new(n: usize) -> Self {
         Self {
             parent: (0..n).collect(),
@@ -86,7 +86,7 @@ pub fn part_one(input: &str) -> Option<u64> {
 
     edges.sort_unstable_by_key(|e| e.0);
 
-    let mut dsu = DSU::new(n);
+    let mut dsu = Dsu::new(n);
 
     for &(_, u, v) in edges.iter().take(limit) {
         dsu.union(u, v);
@@ -130,7 +130,7 @@ pub fn part_two(input: &str) -> Option<u64> {
 
     edges.sort_unstable_by_key(|e| e.0);
 
-    let mut dsu = DSU::new(n);
+    let mut dsu = Dsu::new(n);
 
     for &(_, u, v) in &edges {
         if dsu.union(u, v) && dsu.num_components() == 1 {
