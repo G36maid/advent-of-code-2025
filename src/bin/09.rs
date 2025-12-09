@@ -12,7 +12,6 @@ impl Point {
     }
 }
 
-// Rectangle structure
 struct Rect {
     x_min: i64,
     x_max: i64,
@@ -35,64 +34,44 @@ impl Rect {
             * ((self.y_max - self.y_min).unsigned_abs() + 1)
     }
 
-    // Check if the rectangle is intersected by any polygon edge
-    fn is_intersected_by_edges(&self, edges: &[(Point, Point)]) -> bool {
-        for &(p1, p2) in edges {
-            // Edge is vertical
-            if p1.x == p2.x {
-                let x = p1.x;
-                let y_start = p1.y.min(p2.y);
-                let y_end = p1.y.max(p2.y);
+    fn within_bounds(&self, bbox: &BoundingBox) -> bool {
+        self.x_min >= bbox.min_x
+            && self.x_max <= bbox.max_x
+            && self.y_min >= bbox.min_y
+            && self.y_max <= bbox.max_y
+    }
 
-                // Check if vertical edge strictly cuts through the rectangle horizontally
-                // x must be strictly between x_min and x_max
-                // y range must overlap with rect y range
-                if x > self.x_min
-                    && x < self.x_max
-                    && y_start.max(self.y_min) < y_end.min(self.y_max)
-                {
-                    return true;
-                }
-            } else {
-                // Edge is horizontal
-                let y = p1.y;
-                let x_start = p1.x.min(p2.x);
-                let x_end = p1.x.max(p2.x);
-
-                // Check if horizontal edge strictly cuts through the rectangle vertically
-                if y > self.y_min
-                    && y < self.y_max
-                    && x_start.max(self.x_min) < x_end.min(self.x_max)
-                {
-                    return true;
-                }
+    fn is_intersected_by_edges(&self, edges: &PolygonEdges) -> bool {
+        // Check vertical edges
+        for &(x, y_start, y_end) in &edges.vertical {
+            if x > self.x_min && x < self.x_max && y_start.max(self.y_min) < y_end.min(self.y_max) {
+                return true;
             }
         }
+
+        // Check horizontal edges
+        for &(y, x_start, x_end) in &edges.horizontal {
+            if y > self.y_min && y < self.y_max && x_start.max(self.x_min) < x_end.min(self.x_max) {
+                return true;
+            }
+        }
+
         false
     }
 
-    // Use Ray Casting to check if the center point is inside the polygon
-    fn center_is_inside(&self, edges: &[(Point, Point)]) -> bool {
-        // Use floating point center to avoid integer boundary issues
-        let c_x = (self.x_min as f64 + self.x_max as f64) / 2.0;
-        let c_y = (self.y_min as f64 + self.y_max as f64) / 2.0;
+    fn center_is_inside(&self, vertical_edges: &[(i64, i64, i64)]) -> bool {
+        // Use integer arithmetic for center point
+        let c_x = (self.x_min + self.x_max) / 2;
+        let c_y = (self.y_min + self.y_max) / 2;
 
-        // Simple check: if the center is exactly on an edge, treat as inside (problem says boundary is green)
-        // But floating point comparison is tricky, so we just use Ray Casting; if the point is on the edge, it's usually counted as correct or needs epsilon
-        // Here we use standard Ray Casting: shoot a ray to the right
+        // Ray casting: count intersections with vertical edges
         let mut intersections = 0;
 
-        for &(p1, p2) in edges {
-            // Only consider vertical edges
-            if p1.x == p2.x {
-                let x = p1.x as f64;
-                let y1 = p1.y.min(p2.y) as f64;
-                let y2 = p1.y.max(p2.y) as f64;
-
-                // Edge is to the right of the point, and the point's Y coordinate is within the edge's range
-                if x > c_x && c_y >= y1 && c_y < y2 {
-                    intersections += 1;
-                }
+        for &(x, y_start, y_end) in vertical_edges {
+            // Ray goes to the right, so edge must be to the right of center
+            // Center's Y must be in the edge's Y range (half-open interval)
+            if x > c_x && c_y >= y_start && c_y < y_end {
+                intersections += 1;
             }
         }
 
@@ -100,7 +79,25 @@ impl Rect {
     }
 }
 
-fn parse_input(input: &str) -> (Vec<Point>, Vec<(Point, Point)>) {
+struct BoundingBox {
+    min_x: i64,
+    max_x: i64,
+    min_y: i64,
+    max_y: i64,
+}
+
+struct PolygonEdges {
+    vertical: Vec<(i64, i64, i64)>,   // (x, y_min, y_max)
+    horizontal: Vec<(i64, i64, i64)>, // (y, x_min, x_max)
+}
+
+struct PolygonData {
+    points: Vec<Point>,
+    edges: PolygonEdges,
+    bbox: BoundingBox,
+}
+
+fn parse_input(input: &str) -> PolygonData {
     let points: Vec<Point> = input
         .lines()
         .filter_map(|line| {
@@ -109,22 +106,60 @@ fn parse_input(input: &str) -> (Vec<Point>, Vec<(Point, Point)>) {
         })
         .collect();
 
-    let mut edges = Vec::new();
-    if !points.is_empty() {
-        for i in 0..points.len() {
-            edges.push((points[i], points[(i + 1) % points.len()]));
+    let mut min_x = i64::MAX;
+    let mut max_x = i64::MIN;
+    let mut min_y = i64::MAX;
+    let mut max_y = i64::MIN;
+
+    let mut vertical = Vec::new();
+    let mut horizontal = Vec::new();
+
+    for i in 0..points.len() {
+        let p1 = points[i];
+        let p2 = points[(i + 1) % points.len()];
+
+        // Update bounding box
+        min_x = min_x.min(p1.x);
+        max_x = max_x.max(p1.x);
+        min_y = min_y.min(p1.y);
+        max_y = max_y.max(p1.y);
+
+        // Categorize edge by orientation
+        if p1.x == p2.x {
+            // Vertical edge
+            let y_start = p1.y.min(p2.y);
+            let y_end = p1.y.max(p2.y);
+            vertical.push((p1.x, y_start, y_end));
+        } else {
+            // Horizontal edge
+            let x_start = p1.x.min(p2.x);
+            let x_end = p1.x.max(p2.x);
+            horizontal.push((p1.y, x_start, x_end));
         }
     }
-    (points, edges)
+
+    PolygonData {
+        points,
+        edges: PolygonEdges {
+            vertical,
+            horizontal,
+        },
+        bbox: BoundingBox {
+            min_x,
+            max_x,
+            min_y,
+            max_y,
+        },
+    }
 }
 
 pub fn part_one(input: &str) -> Option<u64> {
-    let (points, _) = parse_input(input);
+    let data = parse_input(input);
     let mut max_area = 0;
 
-    for i in 0..points.len() {
-        for j in (i + 1)..points.len() {
-            let rect = Rect::from_points(points[i], points[j]);
+    for i in 0..data.points.len() {
+        for j in (i + 1)..data.points.len() {
+            let rect = Rect::from_points(data.points[i], data.points[j]);
             max_area = max_area.max(rect.area());
         }
     }
@@ -133,26 +168,31 @@ pub fn part_one(input: &str) -> Option<u64> {
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
-    let (points, edges) = parse_input(input);
+    let data = parse_input(input);
     let mut max_area = 0;
 
-    for i in 0..points.len() {
-        for j in (i + 1)..points.len() {
-            let rect = Rect::from_points(points[i], points[j]);
+    for i in 0..data.points.len() {
+        for j in (i + 1)..data.points.len() {
+            let rect = Rect::from_points(data.points[i], data.points[j]);
             let area = rect.area();
 
-            // Pruning: if the area is already less than the current maximum, skip checking
+            // Early pruning: skip if area can't beat current maximum
             if area <= max_area {
                 continue;
             }
 
-            // 1. Check if any edge crosses the rectangle
-            if rect.is_intersected_by_edges(&edges) {
+            // Fast rejection: check if rectangle is within polygon bounds
+            if !rect.within_bounds(&data.bbox) {
                 continue;
             }
 
-            // 2. Check if the rectangle is inside (Ray Casting)
-            if rect.center_is_inside(&edges) {
+            // Check if any polygon edge cuts through the rectangle interior
+            if rect.is_intersected_by_edges(&data.edges) {
+                continue;
+            }
+
+            // Check if rectangle center is inside polygon (ray casting)
+            if rect.center_is_inside(&data.edges.vertical) {
                 max_area = area;
             }
         }
