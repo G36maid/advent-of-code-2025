@@ -108,13 +108,12 @@ fn parse_input(input: &str) -> (Vec<Shape>, Vec<Region>) {
 
 fn can_fit_area_check(region: &Region, shapes: &[Shape]) -> bool {
     let region_area = region.width * region.height;
-    let mut required_area = 0;
-
-    for (shape_idx, &count) in region.present_counts.iter().enumerate() {
-        if shape_idx < shapes.len() && count > 0 {
-            required_area += shapes[shape_idx].area * count;
-        }
-    }
+    let required_area = region
+        .present_counts
+        .iter()
+        .enumerate()
+        .filter_map(|(shape_idx, &count)| shapes.get(shape_idx).map(|shape| shape.area * count))
+        .sum::<usize>();
 
     required_area <= region_area
 }
@@ -123,61 +122,51 @@ fn can_fit_area_check(region: &Region, shapes: &[Shape]) -> bool {
 // With slack from empty spaces.
 fn can_fit_parity_check(region: &Region, shapes: &[Shape]) -> bool {
     let region_area = region.width * region.height;
-    let mut required_area = 0;
-    let mut imbalances = Vec::new();
 
-    for (shape_idx, &count) in region.present_counts.iter().enumerate() {
-        if shape_idx < shapes.len() && count > 0 {
-            required_area += shapes[shape_idx].area * count;
-            for _ in 0..count {
-                imbalances.push(shapes[shape_idx].imbalance as isize);
+    let (required_area, imbalances) = region.present_counts.iter().enumerate().fold(
+        (0, Vec::new()),
+        |(mut area, mut imbs), (shape_idx, &count)| {
+            if let Some(shape) = shapes.get(shape_idx) {
+                if count > 0 {
+                    area += shape.area * count;
+                    imbs.extend(std::iter::repeat_n(shape.imbalance as isize, count));
+                }
             }
-        }
-    }
+            (area, imbs)
+        },
+    );
 
     if required_area > region_area {
         return false;
     }
 
     let slack = (region_area - required_area) as isize;
-
-    // Grid imbalance: |B - W|
-    // For a WxH grid:
-    // If W*H is even, B=W, Imbalance=0.
-    // If W*H is odd, |B-W|=1.
     let grid_imbalance = if region_area.is_multiple_of(2) { 0 } else { 1 };
-
-    // Reachable sums using Subset Sum.
     let total_imbalance_sum: usize = imbalances.iter().map(|&x| x as usize).sum();
 
-    // DP for subset sum
-    let mut dp = vec![false; total_imbalance_sum + 1];
-    dp[0] = true;
-
-    for &imb in &imbalances {
-        let val = imb as usize;
-        for j in (val..=total_imbalance_sum).rev() {
-            if dp[j - val] {
-                dp[j] = true;
+    let dp = imbalances.iter().fold(
+        {
+            let mut d = vec![false; total_imbalance_sum + 1];
+            d[0] = true;
+            d
+        },
+        |mut acc, &imb| {
+            let val = imb as usize;
+            for j in (val..=total_imbalance_sum).rev() {
+                acc[j] = acc[j] || acc[j - val];
             }
-        }
-    }
+            acc
+        },
+    );
 
-    // Check all reachable P
-    for (p, &reachable) in dp.iter().enumerate() {
+    dp.iter().enumerate().any(|(p, &reachable)| {
         if reachable {
-            // Net imbalance v = P - (Total - P) = 2P - Total
             let v = 2 * (p as isize) - (total_imbalance_sum as isize);
-
-            // Check condition: |v - grid_imbalance| <= slack
-            let diff = (v - grid_imbalance).abs();
-            if diff <= slack {
-                return true;
-            }
+            (v - grid_imbalance).abs() <= slack
+        } else {
+            false
         }
-    }
-
-    false
+    })
 }
 
 pub fn part_one(input: &str) -> Option<u64> {
