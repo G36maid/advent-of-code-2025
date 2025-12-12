@@ -127,10 +127,8 @@ fn can_fit_parity_check(region: &Region, shapes: &[Shape]) -> bool {
         (0, Vec::new()),
         |(mut area, mut imbs), (shape_idx, &count)| {
             if let Some(shape) = shapes.get(shape_idx) {
-                if count > 0 {
-                    area += shape.area * count;
-                    imbs.extend(std::iter::repeat_n(shape.imbalance as isize, count));
-                }
+                area += shape.area * count;
+                imbs.extend(std::iter::repeat_n(shape.imbalance as isize, count));
             }
             (area, imbs)
         },
